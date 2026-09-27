@@ -71,9 +71,11 @@ def _load_qrels(path: Path) -> dict[str, dict[str, int]]:
         for row in reader:
             query_id = row["query-id"].strip()
             document_id = row["corpus-id"].strip()
-            relevance = int(row["score"])
-            if relevance < 0:
-                raise ValueError("relevance scores must be non-negative")
+            raw_relevance = int(row["score"])
+            # The BEIR TREC-COVID export contains -1 entries. Treat them as
+            # non-relevant so the rest of our evaluation code keeps a
+            # non-negative relevance scale.
+            relevance = max(raw_relevance, 0)
             qrels.setdefault(query_id, {})[document_id] = relevance
     return qrels
 

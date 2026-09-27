@@ -69,10 +69,12 @@ def test_load_trec_covid_rejects_unknown_document(tmp_path) -> None:
         load_trec_covid(tmp_path)
 
 
-def test_load_trec_covid_rejects_negative_relevance(tmp_path) -> None:
+def test_load_trec_covid_normalizes_negative_relevance(tmp_path) -> None:
     _write_fixture(tmp_path)
     (tmp_path / "qrels" / "test.tsv").write_text(
         "query-id\tcorpus-id\tscore\nq1\td1\t-1\n"
     )
-    with pytest.raises(ValueError, match="non-negative"):
-        load_trec_covid(tmp_path)
+
+    dataset = load_trec_covid(tmp_path)
+
+    assert dataset.qrels["q1"]["d1"] == 0
