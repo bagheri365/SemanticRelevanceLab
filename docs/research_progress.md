@@ -763,3 +763,206 @@ does not beat the semantic cross-encoder. The key question is whether optimizing
 relative ordering fixes the ranking-resolution failure observed in the
 pointwise model.
 
+
+---
+
+## Experiment 6 — Pairwise Learning to Rank
+
+### Result
+
+The query-level out-of-fold pairwise linear ranker substantially improved over the pointwise regression tree and essentially matched the semantic reranker on NDCG@10:
+
+```text
+BM25 NDCG@10:             0.5684
+semantic NDCG@10:         0.6981
+pairwise NDCG@10:         0.6979
+
+BM25 MRR:                  0.7797
+semantic MRR:              0.8657
+pairwise MRR:              0.8907
+
+pairwise regressions vs BM25:      12 / 50
+pairwise regressions vs semantic:  24 / 50
+worst pairwise vs BM25:           -0.3737
+worst pairwise vs semantic:       -0.2914
+```
+
+The pairwise model also eliminated the score-resolution failure observed in the pointwise regression tree:
+
+```text
+mean unique pairwise scores / 100 candidates: 100
+minimum unique scores:                       100
+maximum unique scores:                       100
+```
+
+### Interpretation
+
+Directly learning within-query document preferences was much more effective than pointwise graded-relevance regression for the current feature representation.
+
+The pointwise tree produced only about 7.38 distinct scores per 100 candidates, whereas the pairwise model produced a distinct score for every candidate. This strongly supports score quantization as an important failure mode of the pointwise model.
+
+However, removing ties did not eliminate query-level failures. The pairwise model still regressed against semantic ranking on 24 of 50 queries. Aggregate parity with the semantic reranker therefore hides substantial redistribution of quality across individual queries.
+
+The mean pairwise coefficients were:
+
+```text
+-0.8500  query_token_coverage
++0.8429  semantic_score
++0.7105  rare_query_term_coverage
++0.6321  bm25_score
+-0.5637  semantic_rank
+-0.2995  bm25_rank
++0.2194  rank_disagreement
++0.0397  title_token_coverage
+```
+
+Because several score, rank, and lexical variables are correlated, these coefficients should be interpreted as conditional model parameters rather than independent feature importance.
+
+---
+
+## Experiment 7 — Pairwise Feature Ablation and Fold Stability
+
+### Research question
+
+Which relevance signals provide genuine out-of-fold ranking value, and are the directions learned by the pairwise model stable across query folds?
+
+### Results
+
+The same query-level cross-validation procedure was repeated using controlled feature subsets:
+
+| Model | NDCG@10 | MRR | Regressions vs semantic | Worst vs semantic |
+| --- | ---: | ---: | ---: | ---: |
+| Semantic only | 0.6981 | 0.8657 | 0 | +0.0000 |
+| BM25 only | 0.5684 | 0.7797 | 36 | -0.7554 |
+| BM25 + semantic scores | 0.7020 | 0.9033 | 22 | -0.3359 |
+| Scores + lexical features | 0.6951 | 0.8737 | 23 | -0.3318 |
+| Scores + rank features | 0.6978 | 0.8917 | 16 | -0.3916 |
+| All features | 0.6979 | 0.8907 | 24 | -0.2914 |
+| All - query token coverage | 0.6954 | 0.8817 | 23 | -0.3412 |
+| All - rare term coverage | 0.6978 | 0.8745 | 27 | -0.3412 |
+| All - rank disagreement | **0.7024** | **0.9170** | 21 | **-0.2914** |
+
+### Fold coefficient stability
+
+For the all-feature model:
+
+```text
+-0.8500 ± 0.2331  query_token_coverage       sign stable
++0.8429 ± 0.1158  semantic_score             sign stable
++0.7105 ± 0.1097  rare_query_term_coverage   sign stable
++0.6321 ± 0.2155  bm25_score                 sign stable
+-0.5637 ± 0.1146  semantic_rank              sign stable
+-0.2995 ± 0.1785  bm25_rank                  sign stable
++0.2194 ± 0.0959  rank_disagreement          sign stable
++0.0397 ± 0.1912  title_token_coverage        sign unstable
+```
+
+Seven of eight coefficient signs were consistent across folds. The negative query-token-coverage coefficient is therefore not attributable to a single pathological fold, although its conditional meaning remains difficult to interpret because the model contains correlated lexical, score, and rank signals.
+
+### Main findings
+
+The semantic score remains the dominant ranking signal, but BM25 provides useful complementary evidence. Combining only BM25 and semantic scores increased NDCG@10 from 0.6981 to 0.7020 and MRR from 0.8657 to 0.9033.
+
+The full eight-feature model did not improve aggregate ranking quality over this simple score combination. The current hand-engineered lexical features are useful diagnostically, but the ablation does not demonstrate that they provide incremental aggregate ranking value.
+
+Removing rank disagreement produced the strongest aggregate result in this sweep:
+
+```text
+NDCG@10: 0.7024
+MRR:     0.9170
+```
+
+This is evidence that adding more document-level signals is not automatically beneficial.
+
+Robustness remains unresolved. The strongest aggregate configurations still regress against the semantic baseline on roughly 21–22 of 50 queries, with substantial worst-case losses.
+
+---
+
+## Updated Research Progression After Pairwise Experiments
+
+```text
+BM25 baseline
+    ↓
+semantic cross-encoder reranking
+    ↓
+semantic failure analysis
+    ↓
+lexical + semantic score fusion
+    ↓
+interpretable relevance diagnostics
+    ↓
+graded relevance analysis
+    ↓
+pointwise learned relevance
+    ↓
+score quantization / large tie groups
+    ↓
+pairwise learning to rank
+    ↓
+full score resolution + semantic-level NDCG
+    ↓
+pairwise feature ablation
+    ↓
+simple BM25 + semantic evidence is highly competitive
+    ↓
+next: query-adaptive score fusion
+```
+
+---
+
+## Next Study — Query-Adaptive Score Fusion
+
+### Research question
+
+> Can query-level evidence predict when lexical BM25 evidence should influence an otherwise semantic ranking?
+
+### Motivation
+
+Experiments 6 and 7 suggest that the principal useful document-level signals are already captured by the semantic and BM25 scores. A larger document-level model is therefore not the most direct next step.
+
+The remaining problem is query dependent: score combination improves aggregate quality but causes substantial regressions on some queries.
+
+This motivates a query-adaptive fusion model:
+
+```text
+score(q, d) =
+    alpha(q) * semantic_score(q, d)
+    + (1 - alpha(q)) * bm25_score(q, d)
+```
+
+where the fusion weight is determined from query-level evidence rather than being fixed globally.
+
+### Experimental principle
+
+All decisions about `alpha(q)` must remain out-of-fold by query. No relevance labels or oracle performance from a held-out query may be used to select its fusion weight.
+
+The first stage should remain deliberately simple and interpretable. The goal is to determine whether observable query characteristics explain when lexical evidence helps or hurts semantic ranking before introducing a more complex nonlinear ranker.
+
+### Candidate query-level signals
+
+Initial signals can be aggregated from the existing candidate-level artifacts without introducing new neural inference. Examples include:
+
+- distribution and spread of BM25 scores;
+- distribution and spread of semantic scores;
+- lexical/semantic rank correlation or disagreement;
+- mean and maximum rare-query-term coverage;
+- title-coverage statistics;
+- query length and token rarity;
+- concentration of semantic scores near the top of the candidate list.
+
+The purpose of these features is not to use held-out relevance judgments, but to characterize the query and the disagreement between available rankers before selecting a fusion behavior.
+
+### Evaluation
+
+Compare query-adaptive fusion against:
+
+- pure semantic ranking;
+- fixed BM25/semantic score combination;
+- the all-feature pairwise model;
+- the all-minus-rank-disagreement pairwise configuration.
+
+Primary measurements should include NDCG@10, MRR, number of regressions versus semantic ranking, worst per-query regression, and the distribution of learned fusion behavior across held-out queries.
+
+### Success criterion
+
+A useful result need not maximize only mean NDCG. Reducing severe query-level regressions while retaining most or all of the aggregate gain would be a meaningful improvement in ranking robustness.
