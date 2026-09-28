@@ -56,6 +56,16 @@ def run_semantic_rerank_experiment(
         semantic_results = rerank(query.text, candidates, scorer)
         rerank_latencies.append((perf_counter() - start) * 1000.0)
         semantic_ids = [document_id for document_id, _ in semantic_results]
+        semantic_scores = dict(semantic_results)
+        bm25_scores = dict(bm25_results)
+        bm25_ranks = {
+            document_id: rank
+            for rank, document_id in enumerate(bm25_ids, start=1)
+        }
+        semantic_ranks = {
+            document_id: rank
+            for rank, document_id in enumerate(semantic_ids, start=1)
+        }
 
         bm25_run[query_id] = bm25_ids
         semantic_run[query_id] = semantic_ids
@@ -73,6 +83,23 @@ def run_semantic_rerank_experiment(
                     _reciprocal_rank(semantic_ids, judgments)
                     - _reciprocal_rank(bm25_ids, judgments)
                 ),
+                "candidates": [
+                    {
+                        "document_id": document_id,
+                        "relevance": judgments.get(document_id, 0),
+                        "bm25_rank": bm25_ranks[document_id],
+                        "semantic_rank": semantic_ranks[document_id],
+                        "rank_movement": (
+                            bm25_ranks[document_id]
+                            - semantic_ranks[document_id]
+                        ),
+                        "bm25_score": bm25_scores[document_id],
+                        "semantic_score": semantic_scores[document_id],
+                        "title": dataset.corpus[document_id].title,
+                        "snippet": _snippet(dataset.corpus[document_id].text),
+                    }
+                    for document_id in semantic_ids
+                ],
             }
         )
 
@@ -98,6 +125,14 @@ def run_semantic_rerank_experiment(
         },
         "queries": query_rows,
     }
+
+
+def _snippet(text: str, limit: int = 240) -> str:
+    """Return a compact one-line document preview."""
+    compact = " ".join(text.split())
+    if len(compact) <= limit:
+        return compact
+    return compact[: limit - 1].rstrip() + "…"
 
 
 def save_result(payload: dict[str, object], path: str | Path) -> Path:
