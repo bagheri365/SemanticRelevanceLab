@@ -7,6 +7,8 @@ import json
 from pathlib import Path
 from statistics import mean
 
+from semantic_relevance.data import load_trec_covid
+from semantic_relevance.evaluation import evaluate
 from semantic_relevance.evaluation.analysis import query_metrics
 
 
@@ -50,18 +52,11 @@ def fuse_query(
     return sorted(fused, key=lambda document_id: (-fused[document_id], document_id))
 
 
-def _aggregate(query_metrics_rows: list[dict[str, float]]) -> dict[str, float]:
-    names = ("ndcg@10", "recall@10", "recall@100")
-    return {
-        name: mean(row[name] for row in query_metrics_rows)
-        for name in names
-    }
-
-
 def run_score_fusion(
     payload: dict[str, object],
     *,
     alphas: list[float],
+    qrels: dict[str, dict[str, int]],
 ) -> dict[str, object]:
     """Sweep fusion weights and report quality plus per-query robustness."""
     if not alphas:
@@ -73,27 +68,24 @@ def run_score_fusion(
     experiments: list[dict[str, object]] = []
 
     for alpha in alphas:
-        metric_rows: list[dict[str, float]] = []
+        fused_run: dict[str, list[str]] = {}
         deltas_vs_bm25: list[float] = []
         deltas_vs_semantic: list[float] = []
 
         for row in rows:
+            query_id = str(row["query_id"])
             candidates = list(row["candidates"])
-            judgments = {
-                str(candidate["document_id"]): int(candidate["relevance"])
-                for candidate in candidates
-                if int(candidate["relevance"]) > 0
-            }
+            judgments = qrels.get(query_id, {})
             fused_ids = fuse_query(candidates, alpha=alpha)
+            fused_run[query_id] = fused_ids
             fused_metrics = query_metrics(fused_ids, judgments)
-            metric_rows.append(fused_metrics)
 
             bm25_ndcg = float(row["bm25"]["ndcg@10"])
             semantic_ndcg = float(row["semantic"]["ndcg@10"])
             deltas_vs_bm25.append(fused_metrics["ndcg@10"] - bm25_ndcg)
             deltas_vs_semantic.append(fused_metrics["ndcg@10"] - semantic_ndcg)
 
-        aggregate = _aggregate(metric_rows)
+        aggregate = evaluate(fused_run, qrels)
         experiments.append(
             {
                 "alpha": alpha,
@@ -151,6 +143,7 @@ def _parse_alphas(value: str) -> list[float]:
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", required=True)
+    parser.add_argument("--data", required=True)
     parser.add_argument(
         "--output",
         default="artifacts/results/score_fusion.json",
@@ -167,7 +160,12 @@ def _parse_args() -> argparse.Namespace:
 def main() -> None:
     args = _parse_args()
     payload = json.loads(Path(args.input).read_text(encoding="utf-8"))
-    result = run_score_fusion(payload, alphas=args.alphas)
+    dataset = load_trec_covid(args.data)
+    result = run_score_fusion(
+        payload,
+        alphas=args.alphas,
+        qrels=dataset.qrels,
+    )
     output = save_result(result, args.output)
     print(f"saved {output}")
     print("alpha  ndcg@10  recall@10  regress-vs-bm25  worst-vs-bm25")

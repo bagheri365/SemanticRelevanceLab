@@ -45,6 +45,7 @@ def test_run_score_fusion_reports_robustness() -> None:
         "candidate_k": 2,
         "queries": [
             {
+                "query_id": "q1",
                 "bm25": {"ndcg@10": 0.6309297535714575},
                 "semantic": {"ndcg@10": 1.0},
                 "candidates": [
@@ -54,7 +55,7 @@ def test_run_score_fusion_reports_robustness() -> None:
             }
         ],
     }
-    result = run_score_fusion(payload, alphas=[0.0, 1.0])
+    result = run_score_fusion(payload, alphas=[0.0, 1.0], qrels={"q1": {"d2": 2}})
     lexical, semantic = result["alphas"]
     assert lexical["robustness"]["vs_bm25"]["unchanged_queries"] == 1
     assert semantic["robustness"]["vs_bm25"]["improved_queries"] == 1
@@ -63,4 +64,32 @@ def test_run_score_fusion_reports_robustness() -> None:
 
 def test_run_score_fusion_requires_alphas() -> None:
     with pytest.raises(ValueError, match="at least one"):
-        run_score_fusion({"queries": []}, alphas=[])
+        run_score_fusion({"queries": []}, alphas=[], qrels={})
+
+
+def test_endpoints_use_full_qrels_not_candidate_only_qrels() -> None:
+    payload = {
+        "experiment": "semantic_rerank",
+        "model": "fake",
+        "candidate_k": 2,
+        "queries": [
+            {
+                "query_id": "q1",
+                "bm25": {"ndcg@10": 0.38685280723454163},
+                "semantic": {"ndcg@10": 0.6131471927654584},
+                "candidates": [
+                    _candidate("d1", 0, 10.0, 1.0),
+                    _candidate("d2", 2, 1.0, 10.0),
+                ],
+            }
+        ],
+    }
+    # d3 is relevant but absent from the candidate set. It must still affect
+    # NDCG/recall denominators, just as it does in the source experiment.
+    qrels = {"q1": {"d2": 2, "d3": 2}}
+    result = run_score_fusion(payload, alphas=[0.0, 1.0], qrels=qrels)
+    lexical, semantic = result["alphas"]
+
+    assert lexical["metrics"]["recall@10"] == pytest.approx(0.5)
+    assert semantic["metrics"]["recall@10"] == pytest.approx(0.5)
+    assert lexical["metrics"]["ndcg@10"] < semantic["metrics"]["ndcg@10"]
