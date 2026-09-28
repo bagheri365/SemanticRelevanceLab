@@ -10,30 +10,30 @@ multi-stage search.
 The project rule is simple:
 
 > Improve ranking quality, measure query-level failures, and preserve
-> the evidence --- including regressions and negative results.
+> the evidence — including regressions and negative results.
 
 ## At a Glance
 
--   **Research question:** how much does semantic relevance improve over
-    lexical retrieval, where do the gains come from, and how should
-    relevance signals be combined?
--   **Benchmark:** TREC-COVID via BEIR, with 50 queries and 171,332
-    documents
--   **BM25 baseline:** **0.5552 NDCG@10**, **0.7797 MRR**
--   **Cross-encoder reranking:** **0.6750 NDCG@10**, **0.8657 MRR**
--   **Pairwise learned ranker:** **0.6979 NDCG@10**, **0.8907 MRR**
--   **Best pairwise ablation:** **0.7024 NDCG@10**, **0.9170 MRR**
--   **Main pattern:** semantic reranking supplies the largest quality
-    gain; learned signal combinations can improve ranking further
--   **Remaining problem:** aggregate improvements still hide substantial
-    query-level regressions
+- **Research question:** how much does semantic relevance improve over
+  lexical retrieval, where do the gains come from, and how should
+  relevance signals be combined?
+- **Benchmark:** TREC-COVID via BEIR, with 50 queries and 171,332
+  documents
+- **BM25 baseline:** **0.5552 NDCG@10**, **0.7797 MRR**
+- **Cross-encoder reranking:** **0.6750 NDCG@10**, **0.8657 MRR**
+- **Pairwise learned ranker:** **0.6979 NDCG@10**, **0.8907 MRR**
+- **Best pairwise ablation:** **0.7024 NDCG@10**, **0.9170 MRR**
+- **Main pattern:** semantic reranking supplies the largest quality
+  gain; learned signal combinations can improve ranking further
+- **Remaining problem:** aggregate improvements still hide substantial
+  query-level regressions
 
 Detailed experiment history and diagnostics:
 [`docs/research_progress.md`](docs/research_progress.md)
 
 ## Model Pipeline
 
-``` mermaid
+```mermaid
 flowchart LR
     Q["Query"] --> BM25["BM25 Retrieval"]
     C["171K Document Corpus"] --> BM25
@@ -69,12 +69,12 @@ Search systems rarely rank documents with one relevance signal.
 
 A practical ranking stack may combine:
 
--   lexical retrieval,
--   semantic similarity,
--   cross-encoder scores,
--   handcrafted relevance features,
--   learned ranking models,
--   multi-stage candidate selection.
+- lexical retrieval,
+- semantic similarity,
+- cross-encoder scores,
+- handcrafted relevance features,
+- learned ranking models,
+- multi-stage candidate selection.
 
 When aggregate quality improves, it is easy to miss where the gain came
 from or which queries became worse.
@@ -93,11 +93,11 @@ separate objects of study.
 
 A cross-encoder reranker was applied to the top 100 BM25 candidates.
 
-  System                NDCG@10           MRR     Recall@10
-  --------------- ------------- ------------- -------------
-  BM25                   0.5552        0.7797        0.0157
-  Cross-encoder      **0.6750**    **0.8657**    **0.0181**
-  Delta             **+0.1198**   **+0.0859**   **+0.0024**
+| System        |     NDCG@10 |         MRR |   Recall@10 |
+|---------------|------------:|------------:|------------:|
+| BM25          |      0.5552 |      0.7797 |      0.0157 |
+| Cross-encoder |  **0.6750** |  **0.8657** |  **0.0181** |
+| Delta         | **+0.1198** | **+0.0859** | **+0.0024** |
 
 Recall@100 is unchanged because semantic reranking reorders a fixed BM25
 candidate set rather than retrieving new documents.
@@ -112,11 +112,11 @@ Semantic reranking improved the aggregate result, but not every query.
 
 The strongest observed regressions included queries about:
 
--   COVID-19 complications associated with diabetes,
--   hand sanitizer requirements,
--   SARS-CoV-2 spike protein structure,
--   longer-term complications after recovery,
--   complications associated with hypertension.
+- COVID-19 complications associated with diabetes,
+- hand sanitizer requirements,
+- SARS-CoV-2 spike protein structure,
+- longer-term complications after recovery,
+- complications associated with hypertension.
 
 This motivated query-level diagnostics rather than relying only on mean
 NDCG.
@@ -141,11 +141,11 @@ preserved in [`docs/research_progress.md`](docs/research_progress.md).
 A query-level out-of-fold regression tree improved over BM25 but
 remained below the semantic reranker:
 
-  System                            NDCG@10          MRR
-  ---------------------------- ------------ ------------
-  BM25 candidate ranking             0.5684       0.7797
-  Semantic candidate ranking     **0.6981**   **0.8657**
-  Pointwise regression tree          0.6302       0.8212
+| System                     |    NDCG@10 |        MRR |
+|----------------------------|-----------:|-----------:|
+| BM25 candidate ranking     |     0.5684 |     0.7797 |
+| Semantic candidate ranking | **0.6981** | **0.8657** |
+| Pointwise regression tree  |     0.6302 |     0.8212 |
 
 *Note: the 0.5684 BM25 value in learned-ranking tables is a
 candidate-set evaluation and is not directly comparable to the 0.5552
@@ -153,9 +153,9 @@ full-qrels corpus-level BM25 baseline above.*
 
 The diagnostic exposed severe score quantization:
 
--   mean unique learned scores among 100 candidates: **7.38**
--   mean largest tie group: **42.9**
--   mean largest tie fraction: **0.429**
+- mean unique learned scores among 100 candidates: **7.38**
+- mean largest tie group: **42.9**
+- mean largest tie fraction: **0.429**
 
 This result motivated changing the learning objective rather than simply
 increasing tree complexity.
@@ -164,11 +164,11 @@ increasing tree complexity.
 
 The pairwise model directly learns within-query document preferences.
 
-  System                         NDCG@10          MRR
-  ---------------------------- --------- ------------
-  BM25 candidate ranking          0.5684       0.7797
-  Semantic candidate ranking      0.6981       0.8657
-  Pairwise ranker                 0.6979   **0.8907**
+| System                     | NDCG@10 |        MRR |
+|----------------------------|--------:|-----------:|
+| BM25 candidate ranking     |  0.5684 |     0.7797 |
+| Semantic candidate ranking |  0.6981 |     0.8657 |
+| Pairwise ranker            |  0.6979 | **0.8907** |
 
 The pairwise model produced **100 unique scores for 100 candidates on
 average**, eliminating the coarse score ties observed in the pointwise
@@ -182,17 +182,17 @@ folds for most major signals.
 Feature ablation showed that adding every available feature is not
 automatically beneficial.
 
-  Feature set                            NDCG@10          MRR   Regressions vs semantic
-  --------------------------------- ------------ ------------ -------------------------
-  Semantic only                           0.6981       0.8657                         0
-  BM25 only                               0.5684       0.7797                        36
-  Scores                                  0.7020       0.9033                        22
-  Scores + lexical                        0.6951       0.8737                        23
-  Scores + ranks                          0.6978       0.8917                        16
-  All features                            0.6979       0.8907                        24
-  All minus query-token coverage          0.6954       0.8817                        23
-  All minus rare-term coverage            0.6978       0.8745                        27
-  **All minus rank disagreement**     **0.7024**   **0.9170**                        21
+| Feature set                     |    NDCG@10 |        MRR | Regressions vs semantic |
+|:--------------------------------|-----------:|-----------:|------------------------:|
+| Semantic only                   |     0.6981 |     0.8657 |                       0 |
+| BM25 only                       |     0.5684 |     0.7797 |                      36 |
+| Scores                          |     0.7020 |     0.9033 |                      22 |
+| Scores + lexical                |     0.6951 |     0.8737 |                      23 |
+| Scores + ranks                  |     0.6978 |     0.8917 |                      16 |
+| All features                    |     0.6979 |     0.8907 |                      24 |
+| All minus query-token coverage  |     0.6954 |     0.8817 |                      23 |
+| All minus rare-term coverage    |     0.6978 |     0.8745 |                      27 |
+| **All minus rank disagreement** | **0.7024** | **0.9170** |                      21 |
 
 The best aggregate result so far comes from removing rank disagreement
 from the full pairwise feature set.
@@ -207,20 +207,20 @@ information-retrieval benchmark.
 
 It provides:
 
--   a scientific-document corpus,
--   natural-language queries,
--   graded relevance judgments,
--   enough relevant documents per query to study both ranking quality
-    and recall.
+- a scientific-document corpus,
+- natural-language queries,
+- graded relevance judgments,
+- enough relevant documents per query to study both ranking quality and
+  recall.
 
 The working dataset contains:
 
-  Item                                         Count
-  ---------------------------------------- ---------
-  Documents                                  171,332
-  Queries                                         50
-  BM25 candidates per query                      100
-  Candidate rows used in feature studies       5,000
+| Item                                   |   Count |
+|:---------------------------------------|--------:|
+| Documents                              | 171,332 |
+| Queries                                |      50 |
+| BM25 candidates per query              |     100 |
+| Candidate rows used in feature studies |   5,000 |
 
 Two evaluation contexts appear in the project and should not be
 confused.
@@ -238,42 +238,15 @@ itself.
 
 > retrieve → rerank → diagnose → combine → learn → ablate
 
-  ------------------------------------------------------------------------
-  Stage                                      NDCG@10 What we learned
-  --------------------- ---------------------------- ---------------------
-  BM25 baseline                               0.5552 Lexical retrieval
-                                                     establishes the
-                                                     corpus-level baseline
-
-  Semantic reranking                          0.6750 Cross-encoder scoring
-                                                     provides the largest
-                                                     single quality gain
-
-  Score fusion                                   --- Lexical/semantic
-                                                     blending exposes a
-                                                     quality--robustness
-                                                     tradeoff
-
-  Relevance diagnostics                          --- Lexical coverage and
-                                                     graded relevance help
-                                                     explain promotions
-                                                     and failures
-
-  Pointwise OOF                               0.6302 Improves BM25, but
-                                                     coarse score ties
-                                                     limit ranking
-                                                     resolution
-
-  Pairwise OOF                                0.6979 Direct preference
-                                                     learning fixes score
-                                                     resolution and
-                                                     improves MRR
-
-  Pairwise ablation                       **0.7024** Removing rank
-                                                     disagreement gives
-                                                     the best aggregate
-                                                     result so far
-  ------------------------------------------------------------------------
+| Stage                 |    NDCG@10 | What we learned                                                          |
+|:----------------------|-----------:|:-------------------------------------------------------------------------|
+| BM25 baseline         |     0.5552 | Lexical retrieval establishes the corpus-level baseline                  |
+| Semantic reranking    |     0.6750 | Cross-encoder scoring provides the largest single quality gain           |
+| Score fusion          |       — Le | xical/semantic blending exposes a quality–robustness tradeoff            |
+| Relevance diagnostics |       — Le | xical coverage and graded relevance help explain promotions and failures |
+| Pointwise OOF         |     0.6302 | Improves BM25, but coarse score ties limit ranking resolution            |
+| Pairwise OOF          |     0.6979 | Direct preference learning fixes score resolution and improves MRR       |
+| Pairwise ablation     | **0.7024** | Removing rank disagreement gives the best aggregate result so far        |
 
 ## Negative Results and Failure Analysis
 
@@ -284,10 +257,10 @@ The pointwise regression-tree experiment is the clearest example.
 
 It improved over BM25, but:
 
--   regressed against semantic ranking on **28 of 50 queries**,
--   had a worst semantic regression of **-0.4492 NDCG@10**,
--   produced only about seven distinct scores for 100 candidates on
-    average.
+- regressed against semantic ranking on **28 of 50 queries**,
+- had a worst semantic regression of **-0.4492 NDCG@10**,
+- produced only about seven distinct scores for 100 candidates on
+  average.
 
 Those results were not discarded. They led directly to the
 ranking-resolution diagnostic and then to the pairwise objective.
@@ -324,12 +297,12 @@ training and evaluation partitions.
 
 The principal metrics are:
 
--   NDCG@10,
--   MRR,
--   Recall@10,
--   query-level regressions,
--   worst per-query regression,
--   score resolution.
+- NDCG@10,
+- MRR,
+- Recall@10,
+- query-level regressions,
+- worst per-query regression,
+- score resolution.
 
 Aggregate metrics are always interpreted alongside per-query behavior.
 
@@ -433,34 +406,33 @@ python -m semantic_relevance.experiments.pairwise_feature_ablation \
 
 The intended discipline is:
 
--   establish a lexical baseline before adding learned components,
--   hold candidate sets fixed when comparing rerankers,
--   split learned experiments by query rather than candidate,
--   preserve graded relevance,
--   report aggregate and per-query metrics together,
--   inspect regressions rather than only wins,
--   preserve negative experiments,
--   prefer interpretable experiments before adding model complexity,
--   change one major modeling assumption at a time.
+- establish a lexical baseline before adding learned components,
+- hold candidate sets fixed when comparing rerankers,
+- split learned experiments by query rather than candidate,
+- preserve graded relevance,
+- report aggregate and per-query metrics together,
+- inspect regressions rather than only wins,
+- preserve negative experiments,
+- prefer interpretable experiments before adding model complexity,
+- change one major modeling assumption at a time.
 
 A higher aggregate NDCG is not treated as evidence that every query
 improved.
 
 ## Limitations
 
--   The current study uses one benchmark: TREC-COVID.
--   The corpus and query domain are biomedical.
--   Semantic experiments currently use one primary cross-encoder
-    configuration.
--   Reranking is limited by the BM25 candidate set.
--   The benchmark has only 50 queries, so query-level conclusions have
-    limited statistical power.
--   Learned models use a deliberately small feature space.
--   Candidate-set metrics are not directly interchangeable with the
-    original full-qrels retrieval metrics.
--   Aggregate gains still coexist with meaningful query-level
-    regressions.
--   External-domain replication has not yet been performed.
+- The current study uses one benchmark: TREC-COVID.
+- The corpus and query domain are biomedical.
+- Semantic experiments currently use one primary cross-encoder
+  configuration.
+- Reranking is limited by the BM25 candidate set.
+- The benchmark has only 50 queries, so query-level conclusions have
+  limited statistical power.
+- Learned models use a deliberately small feature space.
+- Candidate-set metrics are not directly interchangeable with the
+  original full-qrels retrieval metrics.
+- Aggregate gains still coexist with meaningful query-level regressions.
+- External-domain replication has not yet been performed.
 
 The current results are evidence about ranking behavior in this
 controlled benchmark, not a universal ranking of retrieval or
@@ -470,15 +442,15 @@ learning-to-rank methods.
 
 The evidence so far supports a division of labor:
 
--   **BM25** provides inexpensive lexical candidate generation,
--   **cross-encoder scoring** supplies the largest semantic quality
-    improvement,
--   **interpretable lexical features** provide useful complementary
-    evidence,
--   **pairwise learning** is better suited to fine-grained ranking than
-    the tested pointwise tree,
--   **feature selection matters** because redundant or noisy ranking
-    signals can reduce quality.
+- **BM25** provides inexpensive lexical candidate generation,
+- **cross-encoder scoring** supplies the largest semantic quality
+  improvement,
+- **interpretable lexical features** provide useful complementary
+  evidence,
+- **pairwise learning** is better suited to fine-grained ranking than
+  the tested pointwise tree,
+- **feature selection matters** because redundant or noisy ranking
+  signals can reduce quality.
 
 A working design hypothesis from SemanticRelevanceLab is:
 
@@ -488,35 +460,35 @@ A working design hypothesis from SemanticRelevanceLab is:
 
 ## Future Research
 
--   investigate the remaining pairwise regressions and robustness
-    tradeoffs,
--   test regularization, alternative pair sampling, and stronger
-    pairwise/listwise objectives,
--   study query-dependent gating between semantic and learned ranking,
--   evaluate inference-cost versus relevance-quality tradeoffs,
--   replicate the study on additional BEIR datasets,
--   test multi-stage ranking cascades and hard-negative mining.
+- investigate the remaining pairwise regressions and robustness
+  tradeoffs,
+- test regularization, alternative pair sampling, and stronger
+  pairwise/listwise objectives,
+- study query-dependent gating between semantic and learned ranking,
+- evaluate inference-cost versus relevance-quality tradeoffs,
+- replicate the study on additional BEIR datasets,
+- test multi-stage ranking cascades and hard-negative mining.
 
 ## Milestones
 
-  Milestone                                 Status
-  ----------------------------------------- ----------
-  Evaluation harness                        Complete
-  BM25 baseline                             Complete
-  Query-level BM25 error analysis           Complete
-  Cross-encoder semantic reranking          Complete
-  Semantic failure analysis                 Complete
-  Lexical/semantic score fusion             Complete
-  Interpretable relevance features          Complete
-  Promotion and graded-relevance analysis   Complete
-  Query-level CV infrastructure             Complete
-  Pointwise learned relevance               Complete
-  Ranking-resolution diagnostics            Complete
-  Pairwise learning-to-rank                 Complete
-  Pairwise feature ablation                 Complete
-  Multi-stage cascade experiments           Next
-  Hard-negative experiments                 Planned
-  Inference-efficiency experiments          Planned
+| Milestone                               | Status   |
+|:----------------------------------------|:---------|
+| Evaluation harness                      | Complete |
+| BM25 baseline                           | Complete |
+| Query-level BM25 error analysis         | Complete |
+| Cross-encoder semantic reranking        | Complete |
+| Semantic failure analysis               | Complete |
+| Lexical/semantic score fusion           | Complete |
+| Interpretable relevance features        | Complete |
+| Promotion and graded-relevance analysis | Complete |
+| Query-level CV infrastructure           | Complete |
+| Pointwise learned relevance             | Complete |
+| Ranking-resolution diagnostics          | Complete |
+| Pairwise learning-to-rank               | Complete |
+| Pairwise feature ablation               | Complete |
+| Multi-stage cascade experiments         | Next     |
+| Hard-negative experiments               | Planned  |
+| Inference-efficiency experiments        | Planned  |
 
 ## Current Conclusion
 
