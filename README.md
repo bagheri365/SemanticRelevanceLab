@@ -33,7 +33,7 @@ Detailed experiment history and diagnostics:
 
 ## Model Pipeline
 
-```mermaid
+``` mermaid
 flowchart LR
     Q["Query"] --> BM25["BM25 Retrieval"]
     C["171K Document Corpus"] --> BM25
@@ -58,9 +58,10 @@ flowchart LR
 ```
 
 **Experimental flow:** BM25 generates the fixed candidate set, the
-cross-encoder adds semantic relevance scores, and learned rankers combine
-lexical, semantic, and ranking signals. All approaches are evaluated against
-the same candidate set using aggregate and query-level metrics.
+cross-encoder adds semantic relevance scores, and learned rankers
+combine lexical, semantic, and ranking signals. All approaches are
+evaluated against the same candidate set using aggregate and query-level
+metrics.
 
 ## Why This Project Exists
 
@@ -120,40 +121,20 @@ The strongest observed regressions included queries about:
 This motivated query-level diagnostics rather than relying only on mean
 NDCG.
 
-### Graded Relevance Explains More Than Binary Relevance
+### Diagnostics Explain the Regressions
 
-Across the top 10 results for all 50 queries:
+Across the top 10 results for all 50 queries, semantic reranking reduced
+grade-0 documents from **187 to 123** and increased grade-2 documents
+from **238 to 304**. Some regression queries showed the opposite local
+pattern, with highly relevant BM25 results displaced by weaker results.
 
-  Relevance grade     BM25   Semantic
-  ----------------- ------ ----------
-  0                    187    **123**
-  1                     75         73
-  2                    238    **304**
+Candidate-level analysis also found stronger lexical evidence among
+relevant documents: query-token coverage was **0.7088 vs 0.6672**,
+title-token coverage **0.3207 vs 0.2486**, and rare-query-term coverage
+**0.6459 vs 0.5883**.
 
-The semantic reranker substantially reduces non-relevant documents and
-increases highly relevant documents in the top 10 overall.
-
-However, several regression queries show the opposite local pattern:
-highly relevant BM25 results are displaced by partially relevant or
-non-relevant documents.
-
-### Interpretable Features Reveal Useful Relevance Signals
-
-The candidate-level feature study covers 5,000 BM25 candidates.
-
-Relevant documents show stronger lexical evidence on average:
-
-  Feature                        Relevant   Non-relevant
-  ---------------------------- ---------- --------------
-  Query-token coverage             0.7088         0.6672
-  Title-token coverage             0.3207         0.2486
-  Rare-query-term coverage         0.6459         0.5883
-  Absolute rank disagreement        26.81          27.88
-
-The promotion analysis also shows that semantic promotion is not
-inherently good or bad. Promoted relevant documents tend to have
-stronger rare-term and title evidence than promoted non-relevant
-documents.
+Detailed promotion, graded-relevance, and feature diagnostics are
+preserved in [`docs/research_progress.md`](docs/research_progress.md).
 
 ### Pointwise Learning Improves BM25 but Loses Ranking Resolution
 
@@ -165,6 +146,10 @@ remained below the semantic reranker:
   BM25 candidate ranking             0.5684       0.7797
   Semantic candidate ranking     **0.6981**   **0.8657**
   Pointwise regression tree          0.6302       0.8212
+
+*Note: the 0.5684 BM25 value in learned-ranking tables is a
+candidate-set evaluation and is not directly comparable to the 0.5552
+full-qrels corpus-level BM25 baseline above.*
 
 The diagnostic exposed severe score quantization:
 
@@ -253,53 +238,42 @@ itself.
 
 > retrieve → rerank → diagnose → combine → learn → ablate
 
-  ------------------------------------------------------------------------------
-  Stage             Question          Result               Disposition
-  ----------------- ----------------- -------------------- ---------------------
-  BM25 baseline     How strong is     0.5552 NDCG@10       Retain as
-                    lexical                                corpus-level baseline
-                    retrieval?                             
+  ------------------------------------------------------------------------
+  Stage                                      NDCG@10 What we learned
+  --------------------- ---------------------------- ---------------------
+  BM25 baseline                               0.5552 Lexical retrieval
+                                                     establishes the
+                                                     corpus-level baseline
 
-  Semantic          Does a            0.6750 NDCG@10       Retain
-  reranking         cross-encoder                          
-                    improve BM25                           
-                    candidates?                            
+  Semantic reranking                          0.6750 Cross-encoder scoring
+                                                     provides the largest
+                                                     single quality gain
 
-  Score fusion      Can lexical and   Smooth               Retain as diagnostic
-                    semantic scores   quality/robustness   
-                    be blended        tradeoff             
-                    safely?                                
+  Score fusion                                   --- Lexical/semantic
+                                                     blending exposes a
+                                                     quality--robustness
+                                                     tradeoff
 
-  Relevance         Which             Lexical coverage     Retain
-  features          interpretable     signals are          
-                    signals separate  informative          
-                    relevant                               
-                    candidates?                            
+  Relevance diagnostics                          --- Lexical coverage and
+                                                     graded relevance help
+                                                     explain promotions
+                                                     and failures
 
-  Promotion         What does         Both useful and      Retain
-  analysis          semantic          harmful promotions   
-                    reranking promote occur                
-                    and demote?                            
+  Pointwise OOF                               0.6302 Improves BM25, but
+                                                     coarse score ties
+                                                     limit ranking
+                                                     resolution
 
-  Graded analysis   Are regressions   Several regressions  Retain
-                    about relevance   replace grade-2      
-                    degree?           results with weaker  
-                                      results              
+  Pairwise OOF                                0.6979 Direct preference
+                                                     learning fixes score
+                                                     resolution and
+                                                     improves MRR
 
-  Pointwise OOF     Can a small       0.6302 NDCG@10;      Retain as
-                    learned model     severe score ties    negative/diagnostic
-                    combine the                            result
-                    signals?                               
-
-  Pairwise OOF      Does learning     0.6979 NDCG@10;      Retain
-                    relative          0.8907 MRR           
-                    preference                             
-                    improve ranking?                       
-
-  Pairwise ablation Which feature     Best: 0.7024         Current best
-                    groups actually   NDCG@10; 0.9170 MRR  aggregate result
-                    help?                                  
-  ------------------------------------------------------------------------------
+  Pairwise ablation                       **0.7024** Removing rank
+                                                     disagreement gives
+                                                     the best aggregate
+                                                     result so far
+  ------------------------------------------------------------------------
 
 ## Negative Results and Failure Analysis
 
@@ -514,17 +488,14 @@ A working design hypothesis from SemanticRelevanceLab is:
 
 ## Future Research
 
--   investigate the remaining pairwise regressions,
--   test regularization and alternative pair sampling,
--   evaluate stronger pairwise or listwise objectives,
+-   investigate the remaining pairwise regressions and robustness
+    tradeoffs,
+-   test regularization, alternative pair sampling, and stronger
+    pairwise/listwise objectives,
 -   study query-dependent gating between semantic and learned ranking,
--   test whether robustness can improve without sacrificing aggregate
-    NDCG,
--   expand semantic and lexical feature families carefully,
 -   evaluate inference-cost versus relevance-quality tradeoffs,
 -   replicate the study on additional BEIR datasets,
--   test multi-stage ranking cascades,
--   investigate hard-negative mining.
+-   test multi-stage ranking cascades and hard-negative mining.
 
 ## Milestones
 
