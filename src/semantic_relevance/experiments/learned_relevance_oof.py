@@ -39,6 +39,7 @@ def run_learned_relevance(
     bm25_run: dict[str, list[str]] = {}
     semantic_run: dict[str, list[str]] = {}
     learned_run: dict[str, list[str]] = {}
+    learned_scores: dict[tuple[str, str], float] = {}
     fold_rows: list[dict[str, object]] = []
 
     for query_id in query_ids:
@@ -72,6 +73,7 @@ def run_learned_relevance(
 
         scored_by_query: dict[str, list[tuple[str, float]]] = {}
         for example, score in zip(test, scores, strict=True):
+            learned_scores[(example.query_id, example.document_id)] = float(score)
             scored_by_query.setdefault(example.query_id, []).append(
                 (example.document_id, score)
             )
@@ -132,8 +134,33 @@ def run_learned_relevance(
             }
         )
 
+    candidate_rows: list[dict[str, object]] = []
+    for query_id in query_ids:
+        learned_ranks = {
+            document_id: rank
+            for rank, document_id in enumerate(learned_run[query_id], start=1)
+        }
+        for document_id in learned_run[query_id]:
+            source = rows_by_key[(query_id, document_id)]
+            candidate_rows.append(
+                {
+                    "query_id": query_id,
+                    "query": source["query"],
+                    "document_id": document_id,
+                    "relevance": int(source["relevance"]),
+                    "bm25_rank": int(source["bm25_rank"]),
+                    "semantic_rank": int(source["semantic_rank"]),
+                    "learned_rank": learned_ranks[document_id],
+                    "learned_score": learned_scores[(query_id, document_id)],
+                }
+            )
+
     return {
         "experiment": "learned_relevance_oof",
+        "candidate_k": max(
+            sum(1 for row in rows if str(row["query_id"]) == query_id)
+            for query_id in query_ids
+        ),
         "features": list(FEATURE_NAMES),
         "model": {
             "type": "regression_tree",
@@ -171,6 +198,7 @@ def run_learned_relevance(
             per_query,
             key=lambda row: float(row["delta_vs_semantic"]),
         ),
+        "candidates": candidate_rows,
     }
 
 
