@@ -238,15 +238,15 @@ itself.
 
 > retrieve → rerank → diagnose → combine → learn → ablate
 
-| Stage                 |    NDCG@10 | What we learned                                                          |
-|:----------------------|-----------:|:-------------------------------------------------------------------------|
-| BM25 baseline         |     0.5552 | Lexical retrieval establishes the corpus-level baseline                  |
-| Semantic reranking    |     0.6750 | Cross-encoder scoring provides the largest single quality gain           |
-| Score fusion          |       — Le | xical/semantic blending exposes a quality–robustness tradeoff            |
-| Relevance diagnostics |       — Le | xical coverage and graded relevance help explain promotions and failures |
-| Pointwise OOF         |     0.6302 | Improves BM25, but coarse score ties limit ranking resolution            |
-| Pairwise OOF          |     0.6979 | Direct preference learning fixes score resolution and improves MRR       |
-| Pairwise ablation     | **0.7024** | Removing rank disagreement gives the best aggregate result so far        |
+| **Stage** | **NDCG@10** | **What we learned** |
+|---|---:|---|
+| BM25 baseline | 0.5552 | Lexical retrieval establishes the corpus-level baseline |
+| Semantic reranking | 0.6750 | Cross-encoder scoring provides the largest single quality gain |
+| Score fusion | — | Lexical/semantic blending exposes a quality–robustness tradeoff |
+| Relevance diagnostics | — | Lexical coverage and graded relevance help explain promotions and failures |
+| Pointwise OOF | 0.6302 | Improves BM25, but coarse score ties limit ranking resolution |
+| Pairwise OOF | 0.6979 | Direct preference learning fixes score resolution and improves MRR |
+| Pairwise ablation | **0.7024** | Removing rank disagreement gives the best aggregate result so far |
 
 ## Negative Results and Failure Analysis
 
