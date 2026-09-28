@@ -31,6 +31,37 @@ The project rule is simple:
 Detailed experiment history and diagnostics:
 [`docs/research_progress.md`](docs/research_progress.md)
 
+## Model Pipeline
+
+```mermaid
+flowchart LR
+    Q["Query"] --> BM25["BM25 Retrieval"]
+    C["171K Document Corpus"] --> BM25
+
+    BM25 -->|"Top 100 candidates"| CE["Cross-Encoder<br/>Semantic Scoring"]
+
+    BM25 --> F["Interpretable Features"]
+    CE --> F
+
+    F --> P["Pointwise Ranker"]
+    F --> PW["Pairwise Ranker"]
+
+    BM25 --> B["BM25 Ranking"]
+    CE --> S["Semantic Ranking"]
+
+    P --> E["Evaluation"]
+    PW --> E
+    B --> E
+    S --> E
+
+    E --> M["NDCG@10 · MRR<br/>Recall · Regressions"]
+```
+
+**Experimental flow:** BM25 generates the fixed candidate set, the
+cross-encoder adds semantic relevance scores, and learned rankers combine
+lexical, semantic, and ranking signals. All approaches are evaluated against
+the same candidate set using aggregate and query-level metrics.
+
 ## Why This Project Exists
 
 Search systems rarely rank documents with one relevance signal.
