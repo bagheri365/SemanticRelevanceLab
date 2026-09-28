@@ -672,3 +672,94 @@ A small tree-based model can represent interactions like this without manually e
 The experiment is interesting even if the learned model does not achieve the highest aggregate NDCG.
 
 The central question is whether learned signal combination can improve the quality/robustness tradeoff observed during manual score fusion while generalizing to queries excluded from training.
+
+---
+
+## Experiment 5 — Pointwise Learned Relevance and Ranking Resolution
+
+### Result
+
+The query-level out-of-fold regression tree improved over BM25 but did not match
+the semantic reranker:
+
+```text
+BM25 NDCG@10:             0.5684
+semantic NDCG@10:         0.6981
+pointwise tree NDCG@10:   0.6302
+
+regressions vs BM25:      20 / 50
+regressions vs semantic:  28 / 50
+worst vs semantic:       -0.4492
+```
+
+The ranking-resolution diagnostic exposed a concrete limitation of the pointwise
+tree:
+
+```text
+mean unique learned scores / 100 candidates:  7.38
+mean largest tie group:                       42.9
+mean largest tie fraction:                    0.429
+
+regression-query mean unique scores:           7.36
+regression-query mean tie fraction:            0.454
+```
+
+One severe regression placed 71 of 100 candidates in the largest score tie.
+
+### Interpretation
+
+The pointwise regression tree compresses a 100-document candidate set into only
+about seven distinct relevance scores on average. This gives the ranker limited
+ability to express the fine-grained ordering needed near the top of the result
+list.
+
+Score quantization is therefore a plausible contributor to the learned model's
+ranking failures. It is not, however, a complete explanation: regressing queries
+have almost the same number of unique scores as the full query set, while their
+largest tie fraction is only moderately higher.
+
+The result motivates changing the learning objective rather than merely making
+the tree deeper.
+
+---
+
+## Next Study — Pairwise Learning to Rank
+
+### Research question
+
+> Does directly learning relative document preferences improve ranking quality
+> and robustness over pointwise graded-relevance regression?
+
+### Hypothesis
+
+A pairwise objective should better match the ranking task because training
+examples explicitly encode preferences such as:
+
+```text
+grade 2 document > grade 1 document
+grade 2 document > grade 0 document
+grade 1 document > grade 0 document
+```
+
+The first experiment will use a small linear pairwise logistic model over the
+existing relevance features. Training pairs are created only within a query,
+and query-level cross-validation remains unchanged.
+
+### Evaluation
+
+Compare:
+
+- BM25;
+- semantic reranking;
+- pointwise regression tree;
+- pairwise linear ranking.
+
+Measure aggregate NDCG@10 and MRR, regressions versus BM25 and semantic ranking,
+worst per-query regression, and score resolution. The five largest pointwise
+regressions are also important case studies: queries 1, 26, 17, 27, and 45.
+
+The experiment is successful as a research result even if the pairwise model
+does not beat the semantic cross-encoder. The key question is whether optimizing
+relative ordering fixes the ranking-resolution failure observed in the
+pointwise model.
+
