@@ -16,3 +16,5 @@ htmlcov/
 .vscode/
 
 # Local experiment artifacts
+artifacts/
+data/
