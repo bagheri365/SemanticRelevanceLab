@@ -13,7 +13,6 @@ FEATURE_NAMES = (
     "query_token_coverage",
     "title_token_coverage",
     "rare_query_term_coverage",
-    "exact_query_phrase_match",
     "rank_disagreement",
 )
 

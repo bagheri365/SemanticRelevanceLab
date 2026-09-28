@@ -24,6 +24,11 @@ def test_build_examples_preserves_features_and_grade() -> None:
     assert len(example.features) == len(FEATURE_NAMES)
 
 
+def test_feature_schema_matches_current_relevance_artifact() -> None:
+    assert "exact_query_phrase_match" not in FEATURE_NAMES
+    assert "rank_disagreement" in FEATURE_NAMES
+
+
 def test_split_examples_is_query_disjoint() -> None:
     examples = build_relevance_examples([_row("q1", 2), _row("q2", 0)])
     train, test = split_examples_by_query(
