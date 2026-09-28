@@ -385,3 +385,290 @@ The milestone should answer:
 > What observable query-document signals distinguish semantic-ranking successes from semantic-ranking failures?
 
 Only after answering that question should the project move toward learned feature combination or learning-to-rank.
+
+---
+
+## Experiment 4 — Interpretable Relevance Diagnostics
+
+### Research question
+
+Can simple, interpretable query-document features help explain when semantic reranking succeeds or fails?
+
+### Feature extraction
+
+The fixed BM25 top-100 candidate set was converted into 5,000 query-document rows.
+
+Features included:
+
+- query token coverage
+- title token coverage
+- IDF-weighted rare-query-term coverage
+- exact query phrase match
+- BM25 score and rank
+- semantic score and rank
+- lexical/semantic rank disagreement
+
+### Relevant versus non-relevant candidates
+
+| Feature | Relevant | Non-relevant | Difference |
+| --- | ---: | ---: | ---: |
+| Query token coverage | 0.7088 | 0.6672 | +0.0416 |
+| Title token coverage | 0.3207 | 0.2486 | +0.0721 |
+| Rare-query-term coverage | 0.6459 | 0.5883 | +0.0576 |
+| Absolute rank disagreement | 26.8094 | 27.8756 | -1.0662 |
+
+Relevant candidates show stronger lexical evidence, particularly in titles and in coverage of rarer query terms.
+
+Absolute lexical/semantic rank disagreement alone does not separate relevance well. This suggests that disagreement is not inherently a failure: semantic reranking must disagree with BM25 to improve results. The important question is what evidence accompanies the disagreement.
+
+### Promotion analysis
+
+Candidates were divided into semantic ranking movements:
+
+- promoted and relevant
+- promoted and non-relevant
+- demoted and relevant
+- demoted and non-relevant
+
+Observed group means:
+
+| Group | Count | Rare-term coverage | Title coverage | Mean rank movement |
+| --- | ---: | ---: | ---: | ---: |
+| Promoted relevant | 1,189 | 0.6259 | 0.3303 | +29.72 |
+| Promoted non-relevant | 1,250 | 0.5760 | 0.2638 | +26.56 |
+| Demoted relevant | 925 | 0.6697 | 0.3076 | -23.99 |
+| Demoted non-relevant | 1,564 | 0.5978 | 0.2360 | -29.64 |
+
+Useful semantic promotions retain stronger rare-term and title evidence than harmful promotions.
+
+However, demoted relevant documents have even stronger rare-term coverage than promoted relevant documents. Therefore no single lexical feature provides a sufficient relevance rule. The behavior depends on interactions between lexical evidence, semantic evidence, and ranking movement.
+
+### Known semantic regressions
+
+Among the ten largest semantic promotions for previously identified regression queries:
+
+| Query | NDCG@10 delta | Non-relevant among 10 largest promotions |
+| --- | ---: | ---: |
+| COVID-19 complications associated with diabetes | -0.3475 | 5 / 10 |
+| Hand sanitizer needed to destroy COVID-19 | -0.2214 | 8 / 10 |
+| SARS-CoV-2 spike protein structure | -0.1729 | 1 / 10 |
+| Long-term complications after recovery | -0.1425 | 8 / 10 |
+| COVID-19 complications associated with hypertension | -0.1316 | 3 / 10 |
+
+These failures are not homogeneous.
+
+For sanitizer and long-term complications, semantic reranking makes many clearly harmful promotions. The spike-protein query is different: almost all of the largest promotions are judged relevant, yet NDCG still falls substantially.
+
+This motivated analysis of graded rather than binary relevance.
+
+---
+
+## Experiment 4B — Graded Relevance Analysis
+
+### Research question
+
+Are semantic regressions caused only by irrelevant promotions, or can the model also fail to distinguish highly relevant from partially relevant documents?
+
+TREC-COVID relevance grades were kept separate:
+
+```text
+0 = non-relevant
+1 = partially relevant
+2 = highly relevant
+```
+
+### Aggregate top-10 composition
+
+Across 50 queries, there are 500 top-10 positions.
+
+| Grade | BM25 | Semantic | Change |
+| --- | ---: | ---: | ---: |
+| 0 — non-relevant | 187 | 123 | -64 |
+| 1 — partially relevant | 75 | 73 | -2 |
+| 2 — highly relevant | 238 | 304 | +66 |
+
+This provides a more concrete explanation for the semantic model's aggregate NDCG improvement.
+
+Semantic reranking replaces many non-relevant top-10 results with highly relevant grade-2 results. The improvement is therefore not merely an increase in binary relevance; it substantially improves the grade composition of the result set.
+
+### Regression: diabetes complications
+
+```text
+BM25:     grade 0 = 1, grade 1 = 0, grade 2 = 9
+Semantic: grade 0 = 2, grade 1 = 2, grade 2 = 6
+```
+
+BM25 already produces an unusually strong result set. Semantic reranking replaces several highly relevant results with weaker or irrelevant documents.
+
+### Regression: hand sanitizer
+
+```text
+BM25:     grade 0 = 3, grade 1 = 4, grade 2 = 3
+Semantic: grade 0 = 7, grade 1 = 2, grade 2 = 1
+```
+
+This is a broad relevance failure: the semantic ranker substantially increases irrelevant results while reducing highly relevant results.
+
+### Regression: SARS-CoV-2 spike protein structure
+
+```text
+BM25:     grade 0 = 0, grade 1 = 1, grade 2 = 9
+Semantic: grade 0 = 1, grade 1 = 2, grade 2 = 7
+```
+
+Promotion analysis had shown only one non-relevant document among the ten largest semantic promotions. Graded analysis explains the apparent contradiction.
+
+The semantic ranker is not primarily promoting unrelated material. Instead, it degrades a very strong BM25 ranking by replacing some grade-2 documents with grade-1 and grade-0 documents.
+
+This is a fine-grained relevance discrimination failure rather than simply a topical matching failure.
+
+### Regression: hypertension complications
+
+```text
+BM25:     grade 0 = 3, grade 1 = 2, grade 2 = 5
+Semantic: grade 0 = 2, grade 1 = 2, grade 2 = 6
+```
+
+Top-10 grade composition improves, yet NDCG@10 decreases by 0.1316.
+
+This demonstrates that grade counts alone are insufficient. NDCG is position-sensitive: moving highly relevant documents lower in the ranking can reduce quality even when the total number of grade-2 documents increases.
+
+### Learning
+
+The diagnostic experiments reveal multiple kinds of semantic-ranking failure:
+
+1. promoting irrelevant documents;
+2. failing important lexical/query constraints;
+3. confusing partial relevance with high relevance;
+4. degrading already-strong lexical rankings;
+5. ordering highly relevant documents poorly within the top ranks.
+
+The evidence also shows why neither lexical overlap nor semantic score should be treated as a sufficient relevance signal in isolation.
+
+---
+
+## Updated Research Progression
+
+```text
+BM25 baseline
+    ↓
+lexical failure analysis
+    ↓
+cross-encoder semantic reranking
+    ↓
++21.6% relative NDCG@10
+    ↓
+semantic error analysis
+    ↓
+lexical + semantic score fusion
+    ↓
+quality / robustness frontier
+    ↓
+interpretable relevance features
+    ↓
+good vs harmful semantic promotions
+    ↓
+graded relevance analysis
+    ↓
+multiple distinct ranking failure modes
+    ↓
+next: learned relevance combination
+```
+
+---
+
+## Next Study — Small Learned Relevance Model
+
+### Research question
+
+> Can a small model learn when to trust lexical evidence, semantic evidence, and constraint-related features in order to predict graded relevance on unseen queries?
+
+### Inputs
+
+The initial feature set will use signals already produced by the project:
+
+- BM25 score
+- BM25 rank
+- semantic score
+- semantic rank
+- query token coverage
+- title token coverage
+- rare-query-term coverage
+- exact query phrase match
+- lexical/semantic rank disagreement
+
+### Target
+
+Use the original graded relevance judgments:
+
+```text
+0 = non-relevant
+1 = partially relevant
+2 = highly relevant
+```
+
+### Evaluation design
+
+Candidate rows must **not** be randomly split.
+
+Documents from the same query share the same information need, so randomly distributing query-document rows between train and test sets would leak query-specific information and produce an unrealistically easy evaluation.
+
+Instead, evaluation should split by query.
+
+Proposed protocol:
+
+```text
+50 queries
+    ↓
+5-fold cross-validation by query
+    ↓
+~40 training queries / ~10 held-out queries per fold
+    ↓
+predict relevance for held-out candidates
+    ↓
+reconstruct held-out rankings
+    ↓
+evaluate NDCG@10
+```
+
+Every query must appear in exactly one held-out fold.
+
+### Baselines
+
+The learned ranker should be compared against:
+
+- BM25
+- pure semantic reranking
+- lexical/semantic score fusion
+
+Evaluation should include:
+
+- mean NDCG@10
+- Recall@10 where appropriate
+- number of regressions versus BM25
+- worst per-query regression
+- query-level wins and losses
+
+### Modeling principle
+
+The first learned model should remain deliberately small.
+
+The objective is not to outperform the cross-encoder through model scale. It is to test whether interactions among existing relevance signals can improve ranking decisions.
+
+An example interaction suggested by the diagnostic work is:
+
+```text
+high semantic score
++ large semantic promotion
++ weak rare-term/title evidence
+        ↓
+potentially risky promotion
+```
+
+A small tree-based model can represent interactions like this without manually encoding them as fixed rules.
+
+### Success criterion
+
+The experiment is interesting even if the learned model does not achieve the highest aggregate NDCG.
+
+The central question is whether learned signal combination can improve the quality/robustness tradeoff observed during manual score fusion while generalizing to queries excluded from training.
